@@ -1,8 +1,6 @@
-﻿import sys
+﻿import random
 import time
-import random
-import numpy as np
-from PIL import Image
+import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -10,32 +8,27 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from PIL import Image
+import numpy as np
 
 # Terminal çıktısını UTF-8 olarak ayarla
 sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_random_coordinates():
-    # X ve Y koordinatları için sınırlar belirleyelim
-    random_x = random.uniform(-180, 180)  # X koordinatı -180 ile 180 arasında
-    random_y = random.uniform(-90, 90)    # Y koordinatı -90 ile 90 arasında
+    # Avrupa Koordinatları (Boylam -25 ile 50 arasında, Enlem 35 ile 70 arasında)
+    random_x = random.uniform(35, 70)   # Boylam
+    random_y = random.uniform(10, 45)   # Enlem
     return random_x, random_y
 
-def average_color(image_path):
-    """Bir resmin ortalama rengini hesapla."""
-    with Image.open(image_path) as img:
-        img = img.convert("RGB")
-        pixels = np.array(img)
-        r = np.mean(pixels[:,:,0])  # Red kanalının ortalaması
-        g = np.mean(pixels[:,:,1])  # Green kanalının ortalaması
-        b = np.mean(pixels[:,:,2])  # Blue kanalının ortalaması
-        return r, g, b
-
-def is_ocean_color(r, g, b):
-    """Mavi veya siyah tonlarına yakın mı kontrol et."""
-    # Renk analizine göre okyanus mu değil mi kontrol et
-    if b > r and b > g:
-        return True
-    return False
+def calculate_average_color(image_path):
+    # Resmi aç ve renk ortalamasını hesapla
+    img = Image.open(image_path)
+    img = img.convert("RGB")  # Renk formatını RGB'ye çevir
+    np_img = np.array(img)
+    
+    # Renk ortalamasını hesapla
+    avg_color = np.mean(np_img, axis=(0, 1))  # Her pikselin RGB değerlerinin ortalamasını al
+    return avg_color
 
 def capture_screenshot(url, filename="earth_screenshot.png"):
     # Chrome seçenekleri
@@ -45,42 +38,51 @@ def capture_screenshot(url, filename="earth_screenshot.png"):
 
     # WebDriver başlat
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
+    
     try:
-        while True:
-            # Rastgele koordinatları oluştur
-            random_x, random_y = generate_random_coordinates()
+        driver.get(url)
 
-            # URL'yi güncelle
-            test_url = f"https://earth.google.com/web/@{random_y},{random_x},100a,100d,35y,0h,0t,0r"
+        # Sayfanın tamamen yüklenmesini bekle (en az bir öğe yüklenecek)
+        WebDriverWait(driver, 250000).until(
+            EC.presence_of_element_located((By.TAG_NAME, "iframe"))
+        )
+        time.sleep(10)  # Sayfa tam yüklenene kadar bekle
 
-            driver.get(test_url)
+        # Sayfanın ekran görüntüsünü al ve kaydet
+        driver.save_screenshot(filename)
+        print(f"Ekran görüntüsü kaydedildi: {filename}")
 
-            # Sayfanın tamamen yüklenmesini bekle
-            WebDriverWait(driver, 250000).until(
-                EC.presence_of_element_located((By.TAG_NAME, "iframe"))
-            )
-            time.sleep(5)  # Sayfanın tam yüklenmesi için bir süre bekle
+        # Renk ortalamasını hesapla
+        avg_color = calculate_average_color(filename)
+        print(f"Renk ortalaması: {avg_color}")
 
-            # Ekran görüntüsünü al
-            driver.save_screenshot(filename)
-
-            # Renk ortalamasını kontrol et
-            r, g, b = average_color(filename)
-            print(f"Renk Ortalaması: R={r}, G={g}, B={b}")
-
-            if is_ocean_color(r, g, b):
-                print("Okyanus renginde, yeni koordinatlar üretilecek...")
-                continue  # Okyanus renginde ise tekrar yeni koordinatla dene
-            else:
-                print("Kara alanı bulundu, ekran görüntüsü kaydedildi.")
-                break  # Kara alanı bulundu, işlemi sonlandır
+        # Eğer renk ortalaması mavi veya siyah ise yeni koordinatları üret
+        if (avg_color[2] > avg_color[0] and avg_color[2] > avg_color[1]) or np.all(avg_color < [50, 50, 50]):
+            print("Renk mavi veya siyaha yakın, yeni koordinatlar üretilecek...")
+            return True  # Yeni koordinatlar üretilecek
+        else:
+            print("Renk ortalaması okyanus dışı, işlem sonlandırılıyor...")
+            return False  # İşlem sonlanacak
 
     except Exception as e:
         print(f"Hata oluştu: {e}")
+        return False
 
     finally:
         driver.quit()
 
-# Test için ekran görüntüsü al
-capture_screenshot("earth_screenshot.png")
+# Rastgele koordinatları üret
+def process_coordinates():
+    while True:
+        random_x, random_y = generate_random_coordinates()
+        print(f"Koordinatlar: {random_x}, {random_y}")
+        
+        # URL oluştur
+        test_url = f"https://earth.google.com/web/@{random_x},{random_y},1000a,4000d,35y,0h,0t,0r"
+        
+        # Ekran görüntüsünü al ve renk ortalamasına bak
+        if not capture_screenshot(test_url):
+            break  # Eğer renk okyanus dışıysa, döngü sonlanır
+
+# Başlat
+process_coordinates()
