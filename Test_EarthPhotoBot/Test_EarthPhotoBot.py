@@ -15,9 +15,9 @@ import numpy as np
 sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_random_coordinates():
-    # Avrupa Koordinatları (Boylam -25 ile 50 arasında, Enlem 35 ile 70 arasında)
-    random_x = random.uniform(35, 70)   # Boylam
-    random_y = random.uniform(10, 45)   # Enlem
+    # Avrupa Koordinatları (Boylam 10 ile 45 arasında, Enlem 35 ile 70 arasında)
+    random_x = random.uniform(35, 70)   # Enlem
+    random_y = random.uniform(10, 45)   # Boylam
     return random_x, random_y
 
 def calculate_average_color(image_path):
@@ -29,6 +29,24 @@ def calculate_average_color(image_path):
     # Renk ortalamasını hesapla
     avg_color = np.mean(np_img, axis=(0, 1))  # Her pikselin RGB değerlerinin ortalamasını al
     return avg_color
+
+def crop_image(image_path):
+    img = Image.open(image_path)
+    
+    # Görüntü boyutlarını al
+    width, height = img.size
+    
+    # Eğer görüntü yüksekliği 360px'den küçükse kırpma yapma
+    if height < 360:
+        print("Görüntü çok küçük, kırpma işlemi atlandı.")
+        return
+
+    # Yeni kırpılmış alanı belirle (yukarıdan 180px, aşağıdan 180px kes)
+    cropped_img = img.crop((0, 180, width, height - 180))
+    
+    # Aynı dosyanın üzerine yaz
+    cropped_img.save(image_path)
+    print(f"Kırpma işlemi tamamlandı: {image_path}")
 
 def capture_screenshot(url, filename="earth_screenshot.png"):
     # Chrome seçenekleri
@@ -42,7 +60,7 @@ def capture_screenshot(url, filename="earth_screenshot.png"):
     try:
         driver.get(url)
 
-        # Sayfanın tamamen yüklenmesini bekle (en az bir öğe yüklenecek)
+        # Sayfanın tamamen yüklenmesini bekle (iframe yüklenene kadar)
         WebDriverWait(driver, 250000).until(
             EC.presence_of_element_located((By.TAG_NAME, "iframe"))
         )
@@ -62,6 +80,10 @@ def capture_screenshot(url, filename="earth_screenshot.png"):
             return True  # Yeni koordinatlar üretilecek
         else:
             print("Renk ortalaması okyanus dışı, işlem sonlandırılıyor...")
+
+            # Ekran görüntüsünü kırp
+            crop_image(filename)
+
             return False  # İşlem sonlanacak
 
     except Exception as e:
@@ -86,3 +108,4 @@ def process_coordinates():
 
 # Başlat
 process_coordinates()
+
